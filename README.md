@@ -1,229 +1,201 @@
-# Python Security Scanner
+<div align="center">
 
-AST-based static security scanner for Python projects and common config files.
+# 🛡️ SecureFlow
 
-This project analyzes Python source code without executing it. It tracks tainted input from common untrusted sources, follows propagation across assignments and function returns, and reports risky sinks with severity, remediation guidance, and flow context.
+**A modular static security scanner for Python projects — covering the OWASP Top 10.**
 
-## Highlights
+[![Python 3.8+](https://img.shields.io/badge/python-3.8%2B-blue.svg)](https://www.python.org/downloads/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![OWASP Top 10](https://img.shields.io/badge/OWASP-Top%2010-orange.svg)](https://owasp.org/www-project-top-ten/)
+[![Zero Dependencies](https://img.shields.io/badge/dependencies-zero-brightgreen.svg)](#requirements)
 
-- Static analysis built on Python's `ast` module
-- Taint tracking for request data, environment variables, `input()`, and `sys.argv`
-- Flow-aware reporting that shows how untrusted data reaches a sink
-- Severity-based output grouped into `HIGH`, `MEDIUM`, and `LOW`
-- Config scanning for insecure debug and binding settings
-- No third-party dependencies required for the scanner itself
+</div>
 
-## What It Detects
+---
 
-### Injection
+SecureFlow analyzes Python source code **without executing it**. It uses AST-based static analysis and taint tracking to detect vulnerabilities across all 10 OWASP categories — from injection flaws to missing logging — in a clean, plugin-based architecture.
 
-- SQL injection
-  - Detects untrusted input reaching database execution sinks such as `execute()` and `executemany()`
-  - Prefers sink-aware detection to reduce false positives
-- OS command injection
-  - Detects tainted input in `os.system`, `os.popen`, and `subprocess` calls with `shell=True`
-- LDAP injection
-  - Detects tainted data reaching LDAP search-style sinks
-- Cross-site scripting (XSS)
-  - Detects tainted HTML-like strings that are assigned, returned, or printed
+## ✨ Features
 
-### File and Network Risks
+- 🔌 **Plugin architecture** — one file per OWASP category, easy to extend
+- 🌊 **Taint engine** — tracks user input flowing from sources to dangerous sinks
+- 🔍 **Framework-aware** — detects Flask, FastAPI, and Django route patterns
+- 🎯 **Severity classification** — findings grouped as `HIGH`, `MEDIUM`, or `LOW`
+- 📦 **Zero dependencies** — uses only the Python standard library
+- 🎨 **Color-coded output** — terminal-friendly with `--no-color` fallback
 
-- Path traversal / user-controlled file path
-  - Flags tainted filesystem paths passed into file-opening sinks
-  - Escalates severity when explicit traversal markers like `../` or `..\\` appear
-- Server-Side Request Forgery (SSRF)
-  - Flags tainted outbound request targets
-  - Raises severity for obvious internal-address patterns such as `127.x.x.x`, `localhost`, and `192.168.x.x`
+## 📋 OWASP Top 10 Coverage
 
-### Integrity and Deserialization
+| # | Category | Plugin | Key Detections |
+|---|----------|--------|----------------|
+| A01 | Broken Access Control | `broken_access_control.py` | Routes with DB access missing auth decorators/checks |
+| A02 | Cryptographic Failures | `crypto_failures.py` | Weak hashes (MD5/SHA-1), hardcoded secrets |
+| A03 | Injection | `injection.py` | SQL injection, OS command injection, eval/exec misuse |
+| A04 | Insecure Design | `insecure_design.py` | Model/schema classes lacking validation |
+| A05 | Security Misconfiguration | `security_misconfig.py` | Debug mode, open CORS, 0.0.0.0 binding |
+| A06 | Vulnerable Components | `vuln_components.py` | Flagged packages in `requirements.txt` |
+| A07 | Auth Failures | `auth_failures.py` | Plaintext password comparisons, hardcoded passwords |
+| A08 | Data Integrity | `data_integrity.py` | Unsafe pickle/YAML deserialization |
+| A09 | Logging Failures | `logging_monitoring.py` | Sensitive operations without logging |
+| A10 | SSRF | `ssrf.py` | User input passed to outbound HTTP requests |
 
-- Unsafe deserialization via `pickle.load` / `pickle.loads`
-- Dynamic code execution via `eval` / `exec`
-- Unsafe `yaml.load(...)` without a safe loader
+## 🏗️ Project Structure
 
-### Cryptographic and Secret Handling Issues
-
-- Hardcoded secrets
-- Plaintext passwords
-- Weak hashes such as `md5` and `sha1`
-
-### Security Misconfiguration
-
-- Debug mode enabled in code
-- Services binding to `0.0.0.0`
-- Debug and host exposure patterns in config files
-
-## Taint Sources
-
-The scanner treats data from these inputs as untrusted:
-
-- Flask-style request data
-  - `request.args`
-  - `request.form`
-  - `request.values`
-  - `request.headers`
-  - `request.cookies`
-  - `request.json`
-  - `request.files`
-- Environment-based input
-  - `os.getenv(...)`
-  - `os.environ[...]`
-  - `os.environ.get(...)`
-- Command-line input
-  - `sys.argv[...]`
-- Interactive input
-  - `input()`
-
-## Example Output
-
-The report is grouped by severity and includes the issue, fix guidance, origin, and data-flow chain when available.
-
-```text
-[HIGH]
-  app.py:42 | Injection | SQL injection
-    Issue : Tainted data reaches a database execution sink without parameterization.
-    Fix   : Use parameterized queries and keep untrusted input out of raw SQL strings.
-    Origin: `user_id`
-    Flow  : user_id -> query -> execute()
-
-[MEDIUM]
-  views.py:18 | Path Traversal | User-controlled file path
-    Issue : Tainted input is used to build a filesystem path.
-    Fix   : Validate filenames against an allowlist and resolve paths safely before opening files.
+```
+SecureFlow/
+├── main.py                              # CLI entry point
+│
+├── core/
+│   ├── analyzer.py                      # Engine: parse → load plugins → collect findings
+│   ├── taint_engine.py                  # Taint propagation from sources → sinks
+│   └── cfg.py                           # Basic control-flow graph
+│
+├── analysis/
+│   ├── auth_tracker.py                  # Inline authentication check detection
+│   └── framework.py                     # Flask / FastAPI / Django detection
+│
+└── plugins/
+    ├── base.py                          # BaseScannerPlugin interface
+    ├── broken_access_control.py         # A01
+    ├── crypto_failures.py               # A02
+    ├── injection.py                     # A03
+    ├── insecure_design.py               # A04
+    ├── security_misconfig.py            # A05
+    ├── vuln_components.py               # A06
+    ├── auth_failures.py                 # A07
+    ├── data_integrity.py                # A08
+    ├── logging_monitoring.py            # A09
+    └── ssrf.py                          # A10
 ```
 
-## Project Structure
-
-```text
-security_scanner/
-├── security_scanner.py   # Main scanner CLI
-├── README.md             # Project documentation
-├── .gitignore            # Git ignore rules
-└── security/             # Local virtual environment (ignored in Git)
-```
-
-## Requirements
-
-- Python 3.8+
-
-The scanner itself uses only the Python standard library.
-
-## Quick Start
+## 🚀 Quick Start
 
 ### 1. Clone the repository
 
 ```bash
-git clone https://github.com/your-username/security_scanner.git
-cd security_scanner
+git clone https://github.com/swati-yelamanchili/SecureFlow.git
+cd SecureFlow
 ```
 
 ### 2. Run the scanner
 
-Scan the current directory:
-
-```bash
-python3 security_scanner.py
-```
-
 Scan a specific file:
 
 ```bash
-python3 security_scanner.py app.py
+python3 main.py app.py
 ```
 
-Disable ANSI colors:
+Scan an entire directory:
 
 ```bash
-python3 security_scanner.py . --no-color
+python3 main.py /path/to/project
 ```
 
-## How It Works
+Scan the current directory:
 
-### 1. File discovery
+```bash
+python3 main.py
+```
 
-The scanner walks the provided target path and inspects:
+Disable colored output:
 
-- Python files: `*.py`
-- Config files: `.ini`, `.cfg`, `.conf`, `.yaml`, `.yml`, `.toml`, `.json`
-- Named config files such as `.env` and Docker Compose files
+```bash
+python3 main.py app.py --no-color
+```
 
-It skips common noise directories such as:
+## 📊 Example Output
 
-- `.git`
-- `__pycache__`
-- `.pytest_cache`
-- `.mypy_cache`
-- `.venv`
-- `venv`
-- `env`
-- `node_modules`
-- `dist`
-- `build`
-- `security`
+```
+[HIGH]
+  line 15 | Broken Access Control | Missing Access Control
+    Issue : Route with database access lacks proper access control.
+    Fix   : Add authentication/authorization checks.
+  line 27 | Injection | SQL Injection
+    Issue : Tainted input reaches dangerous sink: db.execute
+    Fix   : Sanitize or parameterize inputs.
 
-### 2. AST parsing
+[MEDIUM]
+  line 21 | Cryptographic Failures | Weak Hash Algorithm
+    Issue : Usage of weak hash algorithm: hashlib.md5
+    Fix   : Use strong algorithms like SHA-256 or bcrypt/Argon2.
+  line 30 | Security Misconfiguration | Debug Mode Enabled
+    Issue : Application runs with debug=True.
+    Fix   : Disable debug mode in production.
 
-Each Python file is parsed into an abstract syntax tree. This allows the scanner to inspect assignments, function calls, literals, and control-flow-related nodes without executing application code.
+[LOW]
+  line 10 | Identification and Authentication Failures | Hardcoded Password
+    Issue : Password stored in plaintext in variable 'password'.
+    Fix   : Hash passwords with bcrypt or Argon2 before storage.
+  line 42 | Security Logging and Monitoring Failures | Missing Logging
+    Issue : Sensitive operation 'authenticate' does not implement logging.
+    Fix   : Add logging to audit sensitive transactions.
+```
 
-### 3. Taint propagation
+## ⚙️ Requirements
 
-Tainted values are propagated through:
+- **Python 3.8+**
 
-- direct assignment
-- annotated assignment
-- augmented assignment
-- function returns
-- nested expressions such as f-strings, concatenation, subscripts, containers, and conditional expressions
+No external packages required — the scanner uses only the Python standard library.
 
-### 4. Sink validation
+## 🔧 How It Works
 
-Findings are reported at meaningful sinks such as:
+### 1. File Discovery
+The scanner walks the target path and collects `.py` files, skipping common noise directories (`.git`, `__pycache__`, `venv`, `node_modules`, etc.).
 
-- database execution calls
-- shell execution calls
-- file-opening calls
-- outbound HTTP requests
-- LDAP search calls
+### 2. AST Parsing
+Each file is parsed into an abstract syntax tree, allowing inspection of assignments, function calls, decorators, and control flow without executing any code.
 
-This keeps the output closer to real risk and reduces noisy pattern matching.
+### 3. Taint Propagation
+The taint engine marks variables assigned from user-controlled sources (`request.args`, `input()`, `os.getenv()`, etc.) and propagates taint through assignments, f-strings, concatenations, and function calls.
 
-### 5. Deduplication and sorting
+### 4. Plugin Execution
+All plugins in the `plugins/` directory are auto-discovered and executed. Each plugin receives the parsed AST and shared context (imports, detected framework) to perform its analysis.
 
-The scanner collapses duplicate findings and sorts results by severity first, then by location for predictable output.
+### 5. Findings Report
+Results are deduplicated, classified by severity, and printed in a clean grouped format.
 
-## Supported Severity Levels
+## 🔌 Writing a Custom Plugin
 
-- `HIGH`
-  - confirmed dangerous sinks
-  - explicit traversal patterns
-  - unsafe deserialization and dynamic code execution
-- `MEDIUM`
-  - exploitable-looking but not fully confirmed misuse
-  - XSS, generic SSRF, unsafe YAML loading, non-explicit user-controlled file paths
-- `LOW`
-  - weak crypto, hardcoded secrets, and risky debug settings
+Create a new file in `plugins/` — it will be auto-loaded:
 
-## Scope Limitations
+```python
+# plugins/my_check.py
+import ast
+from plugins.base import BaseScannerPlugin
 
-This scanner is intentionally lightweight. It is useful for learning, demos, and early code review, but it is not a replacement for full SAST tooling or manual security review.
+class MyCheckPlugin(BaseScannerPlugin):
+    def scan(self, tree, context):
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Call):
+                name = self.get_full_name(node.func)
+                if name == "dangerous_function":
+                    self.scanner.add_finding(
+                        node,
+                        "Custom Category",
+                        "Dangerous Call",
+                        "This function is risky.",
+                        "Use a safer alternative.",
+                    )
+```
 
-Current limitations include:
+## ⚠️ Scope & Limitations
 
-- Python-focused only
-- Heuristic-based detection can still produce false positives or false negatives
-- No inter-file dataflow engine
-- No framework-specific sanitization model
-- No autofix mode
+SecureFlow is designed for **learning, demos, and early-stage code review**. It is not a replacement for full SAST tooling or manual security audits.
 
-## Categories Not Currently Covered
+Current limitations:
 
-- Broken Access Control
-- Insecure Design
-- Vulnerable & Outdated Components
-- Identification & Authentication Failures
-- Security Logging & Monitoring Failures
+- Python-only (JavaScript support planned via tree-sitter)
+- No inter-file data flow analysis
+- No framework-specific sanitization models
+- Heuristic-based detection may produce false positives/negatives
+- No auto-fix mode
 
-## License
+## 📄 License
 
-MIT License 
+[MIT License](LICENSE)
+
+---
+
+<div align="center">
+  <sub>Built by <a href="https://github.com/swati-yelamanchili">Swati Yelamanchili</a></sub>
+</div>
